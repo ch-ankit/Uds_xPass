@@ -1,6 +1,6 @@
 """
-poster_all_seasons_analysis.py
-================================
+all_seasons.py
+==============
 Uds_xPass — Poster Extension: All La Liga Seasons + Pass-Type Calibration
 --------------------------------------------------------------------------
 
@@ -43,13 +43,13 @@ USAGE
     # Full run across every La Liga season in the open data (slow — pulls
     # event data for every match in every season the first time; cached
     # to ./data/ afterwards)
-    python poster_all_seasons_analysis.py
+    python all_seasons.py
 
     # Quicker iteration: limit to a few seasons while testing the script
-    python poster_all_seasons_analysis.py --seasons 2020/2021 2019/2020 2018/2019
+    python all_seasons.py --seasons 2020/2021 2019/2020 2018/2019
 
     # Include the bonus 2020/21 event-only vs 360 comparison
-    python poster_all_seasons_analysis.py --with-360
+    python all_seasons.py --with-360
 
 OUTPUTS  (written to ./poster_outputs/)
 ----------------------------------------
@@ -60,19 +60,29 @@ OUTPUTS  (written to ./poster_outputs/)
     calibration_summary_by_pass_type.csv   - Brier / ECE / n per pass type, pooled across seasons
     [optional] event_vs_360_2020_21.png    - only with --with-360
 
+NOTES
+-----
+- Cut-back: StatsBomb's `pass_cut_back` flag never populates in this
+  open-data pull, so it is kept as a (zero-variance) feature but dropped
+  from the per-season logit controls and excluded from the ablation in
+  calibration_study.py.
+- 1973/74: n=469 with incomplete body-part tagging — kept in the CSV for
+  transparency but excluded from the headline claim (see report).
+- Canonical runnable. The archived notebook
+  (archive/poster_all_seasons_analysis.ipynb) is a frozen copy; edit here.
+
 NOTE ON RUNTIME
 ----------------
 StatsBomb's open data has ~20 La Liga seasons on record (mostly Messi-era
 Barcelona matches, ~30-40 matches per season, plus the full 2020/21
 season at ~35 matches). Pulling + featurizing everything can take a
 while on a slow connection — that's why every season's raw events are
-cached to ./data/events_<season_id>.parquet the first time they're
-pulled, so re-running the script (e.g. after tweaking a plot) is fast.
+cached to ./data/passes_<season_id>.parquet (or .pkl if pyarrow is
+missing) the first time they're pulled, so re-running the script (e.g.
+after tweaking a plot) is fast.
 """
 
 import argparse
-import json
-import os
 import warnings
 from pathlib import Path
 
@@ -128,9 +138,12 @@ def get_laliga_seasons():
 # STEP 1 — Pull (and cache) all passes for one season
 # ─────────────────────────────────────────────────────────────────────────
 def pull_season_passes(competition_id, season_id, season_name):
-    cache_path = DATA_DIR / f"passes_{season_id}.parquet"
-    if cache_path.exists():
-        return pd.read_parquet(cache_path)
+    cache_parquet = DATA_DIR / f"passes_{season_id}.parquet"
+    cache_pkl = DATA_DIR / f"passes_{season_id}.pkl"
+    if cache_parquet.exists():
+        return pd.read_parquet(cache_parquet)
+    if cache_pkl.exists():
+        return pd.read_pickle(cache_pkl)
 
     matches = sb.matches(competition_id=competition_id, season_id=season_id)
     print(f"  [{season_name}] {len(matches)} matches — pulling events...")
@@ -156,11 +169,11 @@ def pull_season_passes(competition_id, season_id, season_name):
 
     # Parquet needs list-columns (location, pass_end_location) to be pickled
     # as object — pandas/pyarrow handles this fine, but fall back to pickle
-    # if pyarrow isn't available.
+    # if pyarrow isn't available (this is why ./data/ holds .pkl files).
     try:
-        passes.to_parquet(cache_path)
+        passes.to_parquet(cache_parquet)
     except Exception:
-        passes.to_pickle(cache_path.with_suffix(".pkl"))
+        passes.to_pickle(cache_pkl)
 
     return passes
 
@@ -227,10 +240,14 @@ BASE_FEATS = [
 
 def build_features(df):
     d = df.copy()
-    d["start_x"] = d["location"].apply(lambda l: l[0] if isinstance(l, list) else np.nan)
-    d["start_y"] = d["location"].apply(lambda l: l[1] if isinstance(l, list) else np.nan)
-    d["end_x"] = d["pass_end_location"].apply(lambda l: l[0] if isinstance(l, list) else np.nan)
-    d["end_y"] = d["pass_end_location"].apply(lambda l: l[1] if isinstance(l, list) else np.nan)
+    def coordinate(location, axis):
+        return (location[axis] if isinstance(location, (list, tuple, np.ndarray))
+                and len(location) > axis else np.nan)
+
+    d["start_x"] = d["location"].apply(lambda loc: coordinate(loc, 0))
+    d["start_y"] = d["location"].apply(lambda loc: coordinate(loc, 1))
+    d["end_x"] = d["pass_end_location"].apply(lambda loc: coordinate(loc, 0))
+    d["end_y"] = d["pass_end_location"].apply(lambda loc: coordinate(loc, 1))
     d["dist_to_goal"] = np.sqrt((105 - d["start_x"]) ** 2 + (34 - d["start_y"]) ** 2)
     d["dist_to_sideline"] = np.minimum(d["start_y"], 68 - d["start_y"])
     d["end_dist_to_goal"] = np.sqrt((105 - d["end_x"]) ** 2 + (34 - d["end_y"]) ** 2)
@@ -308,7 +325,13 @@ def train_and_predict(df, feats, seed=42):
 # ─────────────────────────────────────────────────────────────────────────
 # STEP 5 — Hypothesis test: weak foot -> lower completion, per season
 # ─────────────────────────────────────────────────────────────────────────
-def weak_foot_hypothesis_test(df, season_name):
+CANDIDATE_CONTROLS = [
+    "pass_length", "under_pressure", "pass_cross_f", "pass_switch_f",
+    "pass_through_ball_f", "pass_cut_back_f", "dist_to_goal", "angle_to_goal",
+]
+
+
+def weak_foot_hypothesis_test(df, season_name, verbose=True):
     """
     Returns a dict with:
       - raw completion rates for strong vs weak foot
@@ -330,10 +353,17 @@ def weak_foot_hypothesis_test(df, season_name):
     chi2, p_chi2, _, _ = stats.chi2_contingency(table)
 
     # Controlled logistic regression: completed ~ weak_foot + difficulty controls
-    controls = [
-        "pass_length", "under_pressure", "pass_cross_f", "pass_switch_f",
-        "pass_through_ball_f", "pass_cut_back_f", "dist_to_goal", "angle_to_goal",
-    ]
+    # Drop any control with zero variance in THIS season (e.g. pass_cut_back
+    # never occurs) — a constant column makes X'X singular.
+    controls = [c for c in CANDIDATE_CONTROLS if c in d.columns and d[c].nunique() > 1]
+    dropped = [c for c in CANDIDATE_CONTROLS if c not in controls]
+    if dropped and verbose:
+        print(f"    [{season_name}] dropping zero-variance controls: {dropped}")
+
+    coef = ci_low = ci_high = p_val = np.nan
+    logit_error = ""
+    fit_method = "statsmodels_logit"
+
     X = sm.add_constant(d[["weak_foot"] + controls].astype(float))
     y = d["completed"].astype(float)
     try:
@@ -342,8 +372,44 @@ def weak_foot_hypothesis_test(df, season_name):
         ci_low, ci_high = logit.conf_int().loc["weak_foot"]
         p_val = logit.pvalues["weak_foot"]
     except Exception as e:
-        coef = ci_low = ci_high = p_val = np.nan
-        print(f"    logistic regression failed for {season_name}: {e}")
+        logit_error = str(e)
+        if verbose:
+            print(f"    [{season_name}] statsmodels Logit failed: {e} — falling back to sklearn")
+        # Fallback: L2-regularized logistic regression handles near-singular
+        # / (quasi-)separated designs more gracefully than unregularized MLE.
+        # ponytail: bootstrap CI, not exact p-values. Upgrade only if a
+        # season keeps hitting this path.
+        try:
+            from sklearn.linear_model import LogisticRegression
+
+            feat_cols = ["weak_foot"] + controls
+            Xs = d[feat_cols].astype(float).values
+            ys = d["completed"].astype(float).values
+
+            clf = LogisticRegression(penalty="l2", C=1.0, max_iter=2000)
+            clf.fit(Xs, ys)
+            coef = clf.coef_[0][feat_cols.index("weak_foot")]
+
+            rng = np.random.RandomState(0)
+            boot_coefs = []
+            n = len(d)
+            for _ in range(200):
+                idx = rng.randint(0, n, n)
+                try:
+                    c2 = LogisticRegression(penalty="l2", C=1.0, max_iter=1000)
+                    c2.fit(Xs[idx], ys[idx])
+                    boot_coefs.append(c2.coef_[0][feat_cols.index("weak_foot")])
+                except Exception:
+                    continue
+            if boot_coefs:
+                ci_low, ci_high = np.percentile(boot_coefs, [2.5, 97.5])
+                p_val = 2 * min(
+                    np.mean(np.array(boot_coefs) <= 0), np.mean(np.array(boot_coefs) >= 0)
+                )
+            fit_method = "sklearn_l2_fallback"
+            logit_error += " | recovered via sklearn L2 fallback"
+        except Exception as e2:
+            logit_error += f" | sklearn fallback also failed: {e2}"
 
     return {
         "season": season_name,
@@ -357,6 +423,10 @@ def weak_foot_hypothesis_test(df, season_name):
         "logit_ci_low": ci_low,
         "logit_ci_high": ci_high,
         "logit_pvalue": p_val,
+        "fit_method": fit_method,
+        "controls_used": ",".join(controls),
+        "controls_dropped": ",".join(dropped),
+        "logit_error": logit_error,
     }
 
 
@@ -370,15 +440,22 @@ def plot_weak_foot_forest(results_df, path):
 
     fig, ax = plt.subplots(figsize=(8, max(4, 0.4 * len(d))))
     y_pos = np.arange(len(d))
+
+    is_fallback = d.get("fit_method", pd.Series(["statsmodels_logit"] * len(d))) == "sklearn_l2_fallback"
+    colors = np.where(is_fallback, "#D97706", "#1D4ED8")
     ax.errorbar(
         d["logit_weak_foot_coef"], y_pos,
         xerr=[d["logit_weak_foot_coef"] - d["logit_ci_low"],
               d["logit_ci_high"] - d["logit_weak_foot_coef"]],
-        fmt="o", color="#1D4ED8", ecolor="#93C5FD", capsize=3,
+        fmt="none", ecolor="#93C5FD", capsize=3, zorder=1,
     )
+    ax.scatter(d["logit_weak_foot_coef"], y_pos, c=colors, zorder=2, s=40)
     ax.axvline(0, color="#DC2626", ls="--", lw=1.2, label="No effect")
     ax.set_yticks(y_pos)
     ax.set_yticklabels(d["season"])
+    if is_fallback.any():
+        ax.scatter([], [], c="#1D4ED8", s=40, label="statsmodels logit")
+        ax.scatter([], [], c="#D97706", s=40, label="sklearn L2 fallback")
     ax.set_xlabel("Logistic coefficient on weak_foot (controlling for pass difficulty)")
     ax.set_title(
         "Weak-foot passes are completed less often — across every La Liga season\n"
@@ -515,7 +592,7 @@ def defenders_in_lane(passer_loc, end_loc, opponents, width=3.0):
 
 
 def extract_360_features(freeze_frame, passer_loc, end_loc):
-    if not freeze_frame or not isinstance(freeze_frame, list):
+    if not isinstance(freeze_frame, list) or not freeze_frame:
         return {}
     opponents = [p for p in freeze_frame if not p["teammate"] and not p["actor"]]
     teammates = [p for p in freeze_frame if p["teammate"] and not p["actor"]]
@@ -563,7 +640,8 @@ def run_2020_21_event_vs_360_bonus():
         merged = match_passes.merge(df360, on="id", how="left")
         for _, row in merged.iterrows():
             loc, end_loc = row["location"], row["pass_end_location"]
-            if not isinstance(loc, list) or not isinstance(end_loc, list):
+            if not all(isinstance(p, (list, tuple, np.ndarray)) and len(p) >= 2
+                       for p in (loc, end_loc)):
                 continue
             f = extract_360_features(row.get("freeze_frame"), loc, end_loc)
             f["id"], f["match_id"] = row["id"], mid
@@ -572,7 +650,10 @@ def run_2020_21_event_vs_360_bonus():
             print(f"    {i + 1}/{len(matches)} matches processed")
 
     df_360_feats = pd.DataFrame(all_360)
-    df = passes.merge(df_360_feats, on="id", how="left")
+    if df_360_feats.empty or not set(FEATS_360).issubset(df_360_feats.columns):
+        print("  No usable 360 features available — skipping bonus comparison")
+        return
+    df = passes.merge(df_360_feats, on=["id", "match_id"], how="left")
     df_base = build_features(df)
     df_360_built = df_base.dropna(subset=FEATS_360)
 
