@@ -23,7 +23,6 @@ OUTPUTS (./poster_outputs/)
 
 import argparse
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -34,7 +33,7 @@ warnings.filterwarnings("ignore")
 from all_seasons import (  # noqa: E402
     DATA_DIR, OUT_DIR,
     pull_season_passes, add_weak_foot_flag, build_features,
-    BASE_FEATS, train_and_predict, expected_calibration_error,
+    BASE_FEATS, expected_calibration_error,
 )
 import xgboost as xgb  # noqa: E402
 

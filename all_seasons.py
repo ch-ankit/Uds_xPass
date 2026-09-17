@@ -238,6 +238,13 @@ BASE_FEATS = [
 ]
 
 
+# StatsBomb open data uses a 120x80 coordinate system (verified on cache:
+# start x spans 0.1-120.9, y 0.1-80.8). Goal centre is (120, 40); pitch
+# zones below are approximate thirds.
+PITCH_L, PITCH_W = 120, 80
+GOAL_X, GOAL_Y = 120, 40
+
+
 def build_features(df):
     d = df.copy()
     def coordinate(location, axis):
@@ -248,12 +255,12 @@ def build_features(df):
     d["start_y"] = d["location"].apply(lambda loc: coordinate(loc, 1))
     d["end_x"] = d["pass_end_location"].apply(lambda loc: coordinate(loc, 0))
     d["end_y"] = d["pass_end_location"].apply(lambda loc: coordinate(loc, 1))
-    d["dist_to_goal"] = np.sqrt((105 - d["start_x"]) ** 2 + (34 - d["start_y"]) ** 2)
-    d["dist_to_sideline"] = np.minimum(d["start_y"], 68 - d["start_y"])
-    d["end_dist_to_goal"] = np.sqrt((105 - d["end_x"]) ** 2 + (34 - d["end_y"]) ** 2)
+    d["dist_to_goal"] = np.sqrt((GOAL_X - d["start_x"]) ** 2 + (GOAL_Y - d["start_y"]) ** 2)
+    d["dist_to_sideline"] = np.minimum(d["start_y"], PITCH_W - d["start_y"])
+    d["end_dist_to_goal"] = np.sqrt((GOAL_X - d["end_x"]) ** 2 + (GOAL_Y - d["end_y"]) ** 2)
     d["forward_progress"] = d["end_x"] - d["start_x"]
     d["lateral_dist"] = abs(d["end_y"] - d["start_y"])
-    d["angle_to_goal"] = np.arctan2(34 - d["start_y"], 105 - d["start_x"])
+    d["angle_to_goal"] = np.arctan2(GOAL_Y - d["start_y"], GOAL_X - d["start_x"])
     d["pass_direction"] = np.sign(d["forward_progress"])
     ht_map = {"Ground Pass": 0, "Low Pass": 1, "High Pass": 2}
     d["height_num"] = d["pass_height"].map(ht_map).fillna(0)
@@ -268,8 +275,8 @@ def build_features(df):
     )
     d["pass_cut_back_f"] = d["pass_cut_back"].fillna(False).astype(int) if "pass_cut_back" in d else 0
     d["weak_foot_feat"] = d["weak_foot"].fillna(0)
-    d["zone_x"] = pd.cut(d["start_x"], bins=[0, 35, 70, 105], labels=[0, 1, 2]).astype(float)
-    d["zone_y"] = pd.cut(d["start_y"], bins=[0, 23, 45, 68], labels=[0, 1, 2]).astype(float)
+    d["zone_x"] = pd.cut(d["start_x"], bins=[0, 40, 80, 120], labels=[0, 1, 2]).astype(float)
+    d["zone_y"] = pd.cut(d["start_y"], bins=[0, 27, 53, 80], labels=[0, 1, 2]).astype(float)
     d["pressure_x_length"] = d["under_pressure"] * d["pass_length"]
     d["cross_x_pressure"] = d["pass_cross_f"] * d["under_pressure"]
     d["wf_x_cross"] = d["weak_foot_feat"] * d["pass_cross_f"]

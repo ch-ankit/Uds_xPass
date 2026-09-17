@@ -16,9 +16,9 @@ The **cached core pipeline runs end to end** in the existing `xpass` environment
 | `report/main.tex` | Build not verified in this environment: `pdflatex` and `latexmk` are unavailable |
 | Fresh download / clean installation | Not tested end to end; the verified run reused existing pickle caches |
 
-Verification ran in temporary directories, preserving the existing `poster_outputs/` and dashboard. Five of the six regenerated CSVs matched the saved results within `rtol=1e-6, atol=1e-8`. Through-ball recalibration ECE after correction was **0.029324** versus **0.028602** in the saved CSV; exact historical reproduction is therefore not established. Runtime fixes were then rerun through all four scripts, with all six CSVs unchanged relative to the first verification run.
+All four scripts were rerun end to end after the coordinate-scale correction below, and the report tables were reconciled with the regenerated CSVs. The saved `poster_outputs/` reflect the corrected 120×80 geometry.
 
-**Execution success is not scientific validation.** The coordinate-scale issue below must be resolved before treating regenerated model results as corrected findings.
+**Execution success is not scientific validation.** The isotonic, weighting, and split-design limitations below still apply to how the results are interpreted.
 
 ## Setup
 
@@ -97,13 +97,13 @@ cd report
 latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
 ```
 
-The PDF is `report/main.pdf`. Without `latexmk`, run `pdflatex -interaction=nonstopmode -halt-on-error main.tex` twice. Generate the core figures first. Report prose and numerical tables are maintained manually: rerunning Python does not update them. Use the actual underscore-containing filenames in this README; some report references currently replace underscores with hyphens.
+The PDF is `report/main.pdf`. Without `latexmk`, run `pdflatex -interaction=nonstopmode -halt-on-error main.tex` twice. Generate the core figures first. Report prose and numerical tables are maintained manually: rerunning Python does not update them.
 
 ## Analysis design
 
 1. **Base model:** `all_seasons.py` trains a per-season XGBoost classifier with a match-level 80/20 split, seed 42, and 24 event-only features. `laliga_360_xpass.ipynb` is a pilot/reference notebook, not a prerequisite.
 2. **Footedness:** preferred foot is inferred per season using a 55/45 usage rule and at least 20 footed attempts. Controlled logistic regression tests the weak-foot association. FIFA files and source-search notebooks provide separate provenance; the core scripts do not rerun FIFA validation.
-3. **Calibration:** held-out predictions are pooled and grouped as Ordinary, Cross, Switch, or Through ball. Flags can overlap; labeling prioritizes Cross, then Switch, then Through ball. Cut-back is retained as a base-model placeholder but absent from the saved type summaries.
+3. **Calibration:** held-out predictions are pooled and grouped as Ordinary, Cross, Switch, or Through ball. Flags can overlap; labeling prioritizes Cross, then Switch, then Through ball. Cut-back (pooled n≈145) appears in the calibration summary but is excluded from the ablation and recalibration as too thin to split.
 4. **Ablation:** no footedness (22 features), current (24), and full interactions (26). The additional interactions are weak foot × switch and weak foot × through ball.
 5. **Recalibration:** the variant with the lowest mean rare-type ECE is selected; per-type isotonic regression is fitted on half its held-out passes and evaluated on the other half.
 6. **Weighting:** unweighted, inverse-type-frequency, and square-root-inverse-frequency training. Overall AUC is printed to the console, not saved in `weighted_summary.csv`.
@@ -123,11 +123,11 @@ The PDF is `report/main.pdf`. Without `latexmk`, run `pdflatex -interaction=nons
 
 There are 18 cached seasons, but only 17 appear in the saved model-calibration table. The 1973/74 cache has one match and is skipped by the model's minimum-match check; it remains in the hypothesis table. The 2020/21 cache contains **35 matches**, not a full league season; 2015/16 contains 380.
 
-Saved results show a significant negative weak-foot coefficient in **14 of 17 modern seasons**. Ordinary ECE is about 0.003 versus 0.058 for Through balls. Isotonic reduces Through-ball ECE to about 0.029 but increases Cross/Switch ECE. The verification run confirmed weighting AUC of **0.8934 unweighted versus 0.8837 inverse-weighted**. These patterns do not by themselves prove sample scarcity is the cause of miscalibration.
+Saved results show a significant negative weak-foot coefficient in **13 of 17 modern seasons**. Ordinary ECE is about 0.003 versus 0.043 for Through balls. Isotonic worsens ECE on all three rare types (e.g. Through ball 0.054 to 0.074) while leaving Ordinary flat. The verification run confirmed weighting AUC of **0.8955 unweighted versus 0.8890 inverse-weighted**. These patterns do not by themselves prove sample scarcity is the cause of miscalibration.
 
 ## Known limitations and remaining blockers
 
-- **Coordinate scale — correctness blocker:** cached StatsBomb coordinates span 120×80, but `build_features()` uses 105×68 goal locations and zone boundaries without conversion. This misdefines distances and excludes some passes through out-of-range zones. The dashboard also assumes 105×68. Correct this consistently and rerun every analysis before updating report conclusions; the runtime fixes deliberately did not change this methodology.
+- **Coordinate scale — resolved:** cached StatsBomb coordinates span 120×80 and `build_features()` (scripts + notebook), the dashboard pitch/map, and the report now all use the 120×80 grid with goal centre (120, 40) and thirds zones ([0,40,80,120] / [0,27,53,80]). All analyses were rerun end to end afterward and report tables reconciled; previously ~5% of passes were silently dropped by out-of-range zone bins.
 - **Parquet workflow is not fully verified:** shared feature building now accepts NumPy-array coordinates, but the dashboard's sample extraction still accepts lists only. Weighting's default cache discovery finds only `.pkl` files; for Parquet-only caches explicit `--ids` are needed. An actual Parquet round trip was not tested.
 - **360 comparison:** live availability remains unverified. Event-only and 360 models currently use potentially different eligible rows/splits; this is not a controlled like-for-like feature comparison.
 - **Evaluation:** preferred foot is inferred before the train/test split. Isotonic fitting/evaluation splits individual passes, not matches, and variant selection uses the same held-out prediction pool. These are methodological limitations, not resolved by successful execution.
