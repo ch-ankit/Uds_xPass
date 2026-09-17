@@ -1,6 +1,6 @@
 """
-poster_ablation_and_recalibration.py
-======================================
+calibration_study.py
+====================
 Uds_xPass — Poster Extension: Does Footedness Help Calibration? + The Fix
 ----------------------------------------------------------------------------
 
@@ -25,9 +25,9 @@ Two follow-up questions from the poster review:
      before/after reliability diagram.
 
 This script REUSES the cached per-season data from
-`poster_all_seasons_analysis.py` (./data/passes_<season_id>.parquet) and
+`all_seasons.py` (./data/passes_<season_id>.parquet or .pkl) and
 imports its helper functions directly, so nothing needs to be re-pulled from
-StatsBomb — run poster_all_seasons_analysis.py at least once first (or just
+StatsBomb — run all_seasons.py at least once first (or just
 make sure ./data/ is populated).
 
 Note on scope: per the poster decision, Cut-back is EXCLUDED from this
@@ -36,9 +36,9 @@ pull, so there's effectively no signal to ablate or recalibrate there).
 
 USAGE
 -----
-    # Run from the same directory as poster_all_seasons_analysis.py, with
+    # Run from the same directory as all_seasons.py, with
     # ./data/ already populated from a prior run of that script.
-    python poster_ablation_and_recalibration.py
+    python calibration_study.py
 
 OUTPUTS  (written to ./poster_outputs/)
 ----------------------------------------
@@ -49,7 +49,6 @@ OUTPUTS  (written to ./poster_outputs/)
 """
 
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -232,7 +231,6 @@ def recalibrate_and_plot(all_preds, path_plot, path_csv, seed=42):
     isotonic mapping on one half, evaluate original vs. recalibrated
     calibration on the other half (so the 'after' numbers aren't just
     fit-set overfitting)."""
-    rng = np.random.RandomState(seed)
     rows = []
 
     fig, axes = plt.subplots(1, len(TYPES), figsize=(4 * len(TYPES), 4), sharey=True)

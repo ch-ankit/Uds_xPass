@@ -1,5 +1,14 @@
 data/
 downloaded_files/
 data/*.pkl
+data/*.parquet
 __pycache__/
 *.pyc
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+.pi
