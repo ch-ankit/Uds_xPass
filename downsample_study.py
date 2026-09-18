@@ -32,10 +32,14 @@ from sklearn.metrics import brier_score_loss
 warnings.filterwarnings("ignore")
 
 from all_seasons import (  # noqa: E402
-    DATA_DIR, OUT_DIR,
+    OUT_DIR,
     pull_season_passes, add_weak_foot_flag, build_features,
     BASE_FEATS, train_and_predict, expected_calibration_error,
 )
+
+# Fixed default: the five largest season caches (deterministic; size-based
+# discovery flipped between ties across runs, changing the pooled results).
+DEFAULT_IDS = ["1", "90", "26", "23", "27"]
 
 TYPE_FLAGS = {"Cross": "pass_cross_f", "Switch": "pass_switch_f",
               "Through ball": "pass_through_ball_f"}
@@ -48,17 +52,13 @@ def ptype(row):
     return "Ordinary"
 
 
-def largest_cached_ids(k=5):
-    files = sorted(DATA_DIR.glob("passes_*.pkl"), key=lambda p: p.stat().st_size)
-    return [p.stem.split("_")[1] for p in files[-k:]]
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--ids", nargs="*", default=None)
+    ap.add_argument("--ids", nargs="*", default=None,
+                    help="Season ids to use (default: five largest caches).")
     ap.add_argument("--resamples", type=int, default=200)
     args = ap.parse_args()
-    ids = args.ids or largest_cached_ids()
+    ids = args.ids or DEFAULT_IDS
     print(f"Seasons (by cache id): {ids}")
 
     pooled = []

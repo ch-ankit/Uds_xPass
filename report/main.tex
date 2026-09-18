@@ -28,11 +28,11 @@ carry approximately 15--20\% lower completion odds after controlling for
 pass difficulty, an effect that is significant in 13 of the 17 modern seasons (1973/74 excluded, n~=~555, wrong-signed). The
 model discriminates well overall (per-season AUC 0.85--0.91) and is
 near-perfectly calibrated on Ordinary passes (Expected Calibration Error,
-ECE~=~0.003), but calibration degrades by up to a factor of 14 on rare
+ECE~=~0.003), but calibration degrades by up to a factor of 15 on rare
 pass types (Through-ball ECE~=~0.043). A feature ablation shows small,
 inconsistent footedness effects that move error between types rather than
 removing it, and inverse-frequency reweighting of
-rare types degrades calibration almost everywhere. Per-type isotonic recalibration fails on every rare type while leaving Ordinary untouched. An equal-n downsampling experiment shows Ordinary passes degrade tenfold when starved to rare-type sample sizes, since most of the gap is scarcity and estimator noise, with a residual $\sim$1.5--2$\times$ type-intrinsic penalty surviving matching. We conclude
+rare types degrades calibration almost everywhere. Per-type isotonic recalibration fails on every rare type while leaving Ordinary untouched. An equal-n downsampling experiment shows Ordinary passes degrade roughly eightfold when starved to rare-type sample sizes, since most of the gap is scarcity and estimator noise, with a residual type-intrinsic penalty of up to $\sim$2$\times$ surviving matching. We conclude
 that poor calibration on rare pass types is driven primarily by data
 scarcity, with a smaller intrinsic component, rather than by missing footedness features, and that adding
 player-specific technical attributes makes xPass more useful for player
@@ -227,7 +227,7 @@ Cut-back & 145 & 0.545 & 0.567 & 0.179 & 0.070 \\
 \end{tabular}
 \caption{Calibration by pass type, pooled across seasons
 (\url{calibration_summary_by_pass_type.csv}). Through balls are
-$14\times$ worse calibrated than Ordinary passes.}
+$15\times$ worse calibrated than Ordinary passes.}
 \label{tab:cal}
 \end{table}
 \begin{figure}[h]
@@ -243,14 +243,14 @@ Naive ECE comparisons conflate two things: true miscalibration and the
 estimator's own noise, since 10-bin ECE measured on hundreds of points is
 upward-biased even for a calibrated model. Table~\ref{tab:down} removes
 the confound by scoring Ordinary passes at exactly each rare type's n
-(200 resamples; five largest seasons, $\sim$82k Ordinary pooled).
+(200 resamples; five largest seasons, $\sim$100k Ordinary pooled).
 Two facts emerge. First, scarcity dominates: Ordinary ECE inflates roughly
-tenfold going from full pool (0.003) to n~=~539 (0.032, 95\% interval
-0.016--0.049) since most of the rare-type gap is sample size plus binning
-noise. Second, a residual type effect survives equal n: at matched sizes,
-Cross (0.056) and Switch (0.031) calibrate about twice as badly as
-Ordinary (0.029 and 0.016), and Through balls (0.045) about 1.4$\times$
-worse than Ordinary at n~=~539 (0.032). Scarcity explains the bulk of the
+eightfold going from full pool (0.004) to n~=~591 (0.031, 95\% interval
+0.019--0.048), since most of the rare-type gap is sample size plus binning
+noise. Second, a residual type effect survives equal n: Through balls
+(0.046) calibrate about 1.5$\times$ worse than Ordinary at n~=~591
+(0.031), Switch (0.032) over 2$\times$ worse at n~=~2754 (0.014), and
+Cross (0.019) mildly worse at n~=~2563 (0.015). Scarcity explains the bulk of the
 miscalibration, but rare types carry an additional intrinsic penalty,
 consistent with their lower base rates and contested nature, that more
 data alone would shrink but not erase.
@@ -260,19 +260,19 @@ data alone would shrink but not erase.
 \toprule
 Subset & n & Brier & ECE & 95\% interval \\
 \midrule
-Ordinary (full) & 81997 & 0.095 & 0.003 & n/a \\
-Ordinary@n=10000 & 10000 & n/a & 0.008 & 0.004--0.012 \\
-Ordinary@n=2179 & 2179 & n/a & 0.016 & 0.009--0.024 \\
-Switch & 2179 & 0.117 & 0.031 & n/a \\
-Ordinary@n=666 & 666 & n/a & 0.029 & 0.016--0.045 \\
-Cross & 666 & 0.176 & 0.056 & n/a \\
-Ordinary@n=539 & 539 & n/a & 0.032 & 0.016--0.049 \\
-Through ball & 539 & 0.233 & 0.045 & n/a \\
+Ordinary (full) & 100681 & 0.097 & 0.004 & n/a \\
+Ordinary@n=10000 & 10000 & n/a & 0.008 & 0.004--0.013 \\
+Ordinary@n=2754 & 2754 & n/a & 0.014 & 0.008--0.022 \\
+Switch & 2754 & 0.129 & 0.032 & n/a \\
+Ordinary@n=2563 & 2563 & n/a & 0.015 & 0.009--0.024 \\
+Cross & 2563 & 0.183 & 0.019 & n/a \\
+Ordinary@n=591 & 591 & n/a & 0.031 & 0.019--0.048 \\
+Through ball & 591 & 0.228 & 0.046 & n/a \\
 \bottomrule
 \end{tabular}
 \caption{Equal-n downsampling: Ordinary ECE at each rare type's sample size
 (mean over 200 resamples) versus the rare type's actual ECE
-(\url{downsample_summary.csv}). Scarcity explains most of the gap; a $\sim$1.5--2$\times$ residual remains.}
+(\url{downsample_summary.csv}). Scarcity explains most of the gap; a residual gap of up to $\sim$2$\times$ remains.}
 \label{tab:down}
 \end{table}
 
@@ -349,8 +349,8 @@ Four regularities point the same way. First, the weak-foot penalty is
 real and stable across tactical eras, yet the model already observes it
 and still miscalibrates rare types. Second, calibration error orders
 itself by sample size across types, and equal-n downsampling shows
-Ordinary passes degrade tenfold when starved to rare-type sizes,
-though a $\sim$1.5--2$\times$ residual gap survives matching, so rare
+Ordinary passes degrade roughly eightfold when starved to rare-type sizes,
+though a residual gap of up to $\sim$2$\times$ survives matching, so rare
 types are intrinsically harder too. Third, neither richer footedness
 features nor type-reweighting fix the gap: reweighting even harms
 calibration, as theory predicts for base-rate-distorting weights.
