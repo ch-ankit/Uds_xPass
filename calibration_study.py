@@ -61,7 +61,7 @@ warnings.filterwarnings("ignore")
 
 # ── Reuse everything from the main poster script instead of duplicating it ──
 from all_seasons import (   # noqa: E402
-    COMP_ID, DATA_DIR, OUT_DIR,
+    OUT_DIR,
     get_laliga_seasons, pull_season_passes, add_weak_foot_flag, build_features,
     BASE_FEATS, train_and_predict, expected_calibration_error,
 )

@@ -159,7 +159,7 @@ document.addEventListener('mousemove', e => { if(tip.style.display==='block'){
 // Chips
 $('#chips').innerHTML = [
   ['0.85–0.90','per-season AUC'],['−20–25%','weak-foot completion odds'],
-  ['0.003 → 0.058','ECE ordinary → through ball'],['19×','calibration gap, rare vs ordinary']
+  ['0.003 → 0.043','ECE ordinary → through ball'],['14×','calibration gap, rare vs ordinary']
 ].map(c => `<div class="chip"><b>${c[0]}</b><span>${c[1]}</span></div>`).join('');
 
 // Generic grouped bars
@@ -215,7 +215,7 @@ function render(i){
   document.querySelectorAll('#tabs button').forEach((b,j)=>b.classList.toggle('on',j===i));
   if(i===0){ const rows=D.weak;
     body.innerHTML=`<div class="card"><h2>Finding 1 — weak-foot passes complete less often</h2>
-    <p class="d">Controlled logistic coefficient per season (95% CI). Negative = weak foot hurts at fixed difficulty. 1973/74 (n=469, incomplete tagging) excluded from headline.</p>
+    <p class="d">Controlled logistic coefficient per season (95% CI). Negative = weak foot hurts at fixed difficulty. 1973/74 (n=555, incomplete tagging) excluded from headline.</p>
     <div id="f"></div><p class="note">Orange dot would mark sklearn-L2 fallback fits; all seasons here used statsmodels.</p></div>`;
     forest($('#f'), rows.filter(r=>r.season!=='1973/1974')); }
   if(i===1){ const rows=D.cal;
@@ -250,19 +250,21 @@ function render(i){
 document.querySelector('#tabs').addEventListener('click', e=>{
   if(e.target.dataset.t!==undefined) render(+e.target.dataset.t); });
 
-// Shared pitch markings (attack left-to-right)
+// Shared pitch markings, StatsBomb 120x80 coordinates (attack left-to-right)
 function pitchBase(sx){
-  const W=105*sx+20, H=68*sx+20, o=10;
-  const X=x=>o+x*sx, Y=y=>o+(68-y)*sx;
+  const W=120*sx+20, H=80*sx+20, o=10;
+  const X=x=>o+x*sx, Y=y=>o+(80-y)*sx;
   let h=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
-  h+=`<rect x="${o}" y="${o}" width="${105*sx}" height="${68*sx}" fill="#1a6b3c" rx="4"/>`;
+  h+=`<rect x="${o}" y="${o}" width="${120*sx}" height="${80*sx}" fill="#1a6b3c" rx="4"/>`;
   h+=`<g stroke="#ffffff" opacity="0.85" fill="none" stroke-width="1.2">`+
-    `<line x1="${X(52.5)}" y1="${Y(68)}" x2="${X(52.5)}" y2="${Y(0)}"/>`+
-    `<circle cx="${X(52.5)}" cy="${Y(34)}" r="${9.15*sx}"/>`+
-    `<rect x="${X(0)}" y="${Y(44.2)}" width="${16.5*sx}" height="${24.2*sx}"/>`+
-    `<rect x="${X(88.5)}" y="${Y(44.2)}" width="${16.5*sx}" height="${24.2*sx}"/>`+
-    `<rect x="${X(0)}" y="${Y(39.8)}" width="${5.5*sx}" height="${11.6*sx}"/>`+
-    `<rect x="${X(99.5)}" y="${Y(39.8)}" width="${5.5*sx}" height="${11.6*sx}"/></g>`;
+    `<line x1="${X(60)}" y1="${Y(80)}" x2="${X(60)}" y2="${Y(0)}"/>`+
+    `<circle cx="${X(60)}" cy="${Y(40)}" r="${10*sx}"/>`+
+    `<rect x="${X(102)}" y="${Y(62)}" width="${18*sx}" height="${44*sx}"/>`+
+    `<rect x="${X(0)}" y="${Y(62)}" width="${18*sx}" height="${44*sx}"/>`+
+    `<rect x="${X(114)}" y="${Y(50)}" width="${6*sx}" height="${20*sx}"/>`+
+    `<rect x="${X(0)}" y="${Y(50)}" width="${6*sx}" height="${20*sx}"/>`+
+    `<circle cx="${X(108)}" cy="${Y(40)}" r="1.6" fill="#ffffff"/>`+
+    `<circle cx="${X(12)}" cy="${Y(40)}" r="1.6" fill="#ffffff"/></g>`;
   return {h, X, Y};
 }
 function filtPasses(F){
@@ -289,7 +291,7 @@ function geoTab(){
     const rows=filtPasses(F);
     const cells={};
     rows.forEach(p=>{
-      const cx=Math.min(NX-1,Math.floor(p.sx/105*NX)), cy=Math.min(NY-1,Math.floor(p.sy/68*NY));
+      const cx=Math.min(NX-1,Math.floor(p.sx/120*NX)), cy=Math.min(NY-1,Math.floor(p.sy/80*NY));
       const k=cx+'_'+cy;
       cells[k]=cells[k]||{n:0,a:0,x:0};
       cells[k].n++; cells[k].a+=p.a; cells[k].x+=p.x; });
@@ -297,7 +299,7 @@ function geoTab(){
     let h=B.h;
     for(let cx=0;cx<NX;cx++) for(let cy=0;cy<NY;cy++){
       const c=cells[cx+'_'+cy];
-      const x0=cx*105/NX, y0=cy*68/NY, w=105/NX, hh=68/NY;
+      const x0=cx*120/NX, y0=cy*80/NY, w=120/NX, hh=80/NY;
       if(!c||c.n<MINCELL){
         h+=`<rect x="${B.X(x0)}" y="${B.Y(y0+hh)}" width="${w*sx}" height="${hh*sx}" fill="#3d7a52" opacity="0.45"/>`;
         continue; }

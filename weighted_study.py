@@ -23,7 +23,6 @@ OUTPUTS (./poster_outputs/)
 
 import argparse
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -32,9 +31,9 @@ from sklearn.metrics import brier_score_loss, roc_auc_score
 warnings.filterwarnings("ignore")
 
 from all_seasons import (  # noqa: E402
-    DATA_DIR, OUT_DIR,
+    OUT_DIR,
     pull_season_passes, add_weak_foot_flag, build_features,
-    BASE_FEATS, train_and_predict, expected_calibration_error,
+    BASE_FEATS, expected_calibration_error,
 )
 import xgboost as xgb  # noqa: E402
 
@@ -99,17 +98,17 @@ def train_weighted(df, feats, weights, seed=42):
     return out
 
 
-def largest_cached_ids(k=5):
-    files = sorted(DATA_DIR.glob("passes_*.pkl"), key=lambda p: p.stat().st_size)
-    return [p.stem.split("_")[1] for p in files[-k:]]
+# Fixed default: the five largest season caches (deterministic; size-based
+# discovery flipped between ties across runs, changing the pooled results).
+DEFAULT_IDS = ["1", "90", "26", "23", "27"]
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ids", nargs="*", default=None,
-                        help="Season ids to use (default: 5 largest cached).")
+                        help="Season ids to use (default: five largest caches).")
     args = parser.parse_args()
-    ids = args.ids or largest_cached_ids()
+    ids = args.ids or DEFAULT_IDS
     print(f"Seasons (by cache id): {ids}")
 
     variants = ["unweighted", "inv_type", "sqrt_inv_type"]
