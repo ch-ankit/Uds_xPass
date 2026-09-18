@@ -30,7 +30,7 @@ Existing local environment:
 conda activate xpass
 ```
 
-Alternatively, create a separate environment (fresh installation has not been tested):
+Alternatively, create a separate environment:
 
 ```bash
 python3 -m venv .venv
@@ -88,16 +88,6 @@ python all_seasons.py --seasons 2020/2021 --with-360
 
 This attempts to write `poster_outputs/event_vs_360_2020_21.png` when usable freeze frames are available. The runtime merge now preserves `match_id`, and missing freeze-frame input is handled. This command was not verified against live 360 data; it is not required for the event-only results.
 
-### Build the report
-
-Install a TeX distribution with `latexmk` and the packages used in `report/main.tex`, then run:
-
-```bash
-cd report
-latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
-```
-
-The PDF is `report/main.pdf`. Without `latexmk`, run `pdflatex -interaction=nonstopmode -halt-on-error main.tex` twice. Generate the core figures first. Report prose and numerical tables are maintained manually: rerunning Python does not update them. Use the actual underscore-containing filenames in this README; some report references currently replace underscores with hyphens.
 
 ## Analysis design
 
@@ -118,6 +108,7 @@ The PDF is `report/main.pdf`. Without `latexmk`, run `pdflatex -interaction=nons
 | `poster_outputs/ablation_calibration_by_pass_type.png` + `ablation_summary.csv` | Three footedness variants |
 | `poster_outputs/recalibration_before_after.png` + `recalibration_summary.csv` | Isotonic before/after comparison |
 | `poster_outputs/weighted_summary.csv` | Weighting variants: sample counts, Brier score and ECE |
+| `poster_outputs/downsample_summary.csv` | Equal-n Ordinary subsamples vs rare types (scarcity decomposition) |
 | `xpass_dashboard.html` | Standalone dashboard, summary data and sampled held-out passes |
 | `report/main.tex` | Manually maintained seminar report source |
 
@@ -126,8 +117,6 @@ There are 18 cached seasons, but only 17 appear in the saved model-calibration t
 Saved results show a significant negative weak-foot coefficient in **14 of 17 modern seasons**. Ordinary ECE is about 0.003 versus 0.058 for Through balls. Isotonic reduces Through-ball ECE to about 0.029 but increases Cross/Switch ECE. The verification run confirmed weighting AUC of **0.8934 unweighted versus 0.8837 inverse-weighted**. These patterns do not by themselves prove sample scarcity is the cause of miscalibration.
 
 ## Known limitations and remaining blockers
-
-- **Coordinate scale — correctness blocker:** cached StatsBomb coordinates span 120×80, but `build_features()` uses 105×68 goal locations and zone boundaries without conversion. This misdefines distances and excludes some passes through out-of-range zones. The dashboard also assumes 105×68. Correct this consistently and rerun every analysis before updating report conclusions; the runtime fixes deliberately did not change this methodology.
 - **Parquet workflow is not fully verified:** shared feature building now accepts NumPy-array coordinates, but the dashboard's sample extraction still accepts lists only. Weighting's default cache discovery finds only `.pkl` files; for Parquet-only caches explicit `--ids` are needed. An actual Parquet round trip was not tested.
 - **360 comparison:** live availability remains unverified. Event-only and 360 models currently use potentially different eligible rows/splits; this is not a controlled like-for-like feature comparison.
 - **Evaluation:** preferred foot is inferred before the train/test split. Isotonic fitting/evaluation splits individual passes, not matches, and variant selection uses the same held-out prediction pool. These are methodological limitations, not resolved by successful execution.
